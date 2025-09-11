@@ -76,6 +76,12 @@ MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 def parse_args():
     parser = argparse.ArgumentParser(description="Finetune a transformers model on a multiple choice task")
     parser.add_argument(
+        "--paragraph_file",
+        type=str,
+        default=None,
+        help="A file of paragraphs.",
+    )
+    parser.add_argument(
         "--dataset_name",
         type=str,
         default=None,
@@ -237,6 +243,11 @@ def parse_args():
 
 def main():
     args = parse_args()
+    
+    # Load context data as strings.
+    if args.paragraph_file is not None:
+        with open(args.paragraph_file, 'r', encoding='utf-8') as jsFile:
+            context = json.load(jsFile)
 
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
@@ -327,11 +338,13 @@ def main():
         column_names = raw_datasets["validation"].column_names
 
     # When using your own dataset or a different dataset from swag, you will probably need to change this.
-    ending_names = [f"ending{i}" for i in range(4)]
-    context_name = "sent1"
-    question_header_name = "sent2"
-    label_column_name = "label" if "label" in column_names else "labels"
-
+    # ending_names = [f"ending{i}" for i in range(4)]
+    # context_name = "sent1"
+    # question_header_name = "sent2"
+    # label_column_name = "label" if "label" in column_names else "labels"
+    context_name = "question"
+    label_column_name = "relevant"
+    
     # Load pretrained model and tokenizer
     #
     # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
@@ -378,14 +391,25 @@ def main():
     # Preprocessing the datasets.
     # First we tokenize all the texts.
     padding = "max_length" if args.pad_to_max_length else False
+    
+    def get_answer_sentence(examples, i):
+        if(examples["paragraphs"][i][0] == examples[label_column_name][i]):
+            return 0
+        if(examples["paragraphs"][i][1] == examples[label_column_name][i]):
+            return 1
+        if(examples["paragraphs"][i][2] == examples[label_column_name][i]):
+            return 2
+        if(examples["paragraphs"][i][3] == examples[label_column_name][i]):
+            return 3
+        return -1
+        
 
     def preprocess_function(examples):
-        first_sentences = [[context] * 4 for context in examples[context_name]]
-        question_headers = examples[question_header_name]
+        first_sentences = [[acontext] * 4 for acontext in examples[context_name]]
         second_sentences = [
-            [f"{header} {examples[end][i]}" for end in ending_names] for i, header in enumerate(question_headers)
+            [context[paragraph[j]] for j in range(0, 4)] for i, paragraph in enumerate(examples["paragraphs"])
         ]
-        labels = examples[label_column_name]
+        labels = [get_answer_sentence(examples, i) for i in range(len(examples[label_column_name]))]
 
         # Flatten out
         first_sentences = list(chain(*first_sentences))
