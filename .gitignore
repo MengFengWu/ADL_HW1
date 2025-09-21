@@ -1,2 +1,7 @@
 .venv
 ntu-adl-2025-hw-1.zip
+test
+__pycache__
+model
+src/wandb
+src/quicksave.json
