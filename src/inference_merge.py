@@ -9,7 +9,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from accelerate import Accelerator
-from utils_qa_infer import postprocess_qa_predictions
+from utils_qa_infer_merge import postprocess_qa_predictions
 
 import transformers
 from transformers import (
@@ -31,11 +31,11 @@ from transformers.utils.versions import require_version
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Do inference.")
-    parser.add_argument(
-        "--para_model_dir",
-        type=str,
-        help="Directory of paragraph selection model.",
-    )
+    # parser.add_argument(
+    #     "--para_model_dir",
+    #     type=str,
+    #     help="Directory of paragraph selection model.",
+    # )
     parser.add_argument(
         "--span_model_dir",
         type=str,
@@ -80,104 +80,8 @@ def main():
     # accelerator_log_kwargs["project_dir"] = args.output_dir
 
     accelerator = Accelerator(gradient_accumulation_steps=2, **accelerator_log_kwargs)
-
-    para_tokenizer = AutoTokenizer.from_pretrained(args.para_model_dir)
-    
-    para_config = AutoConfig.from_pretrained(args.para_model_dir, trust_remote_code=True)
-    
-    para_model = AutoModelForMultipleChoice.from_pretrained(
-        args.para_model_dir,
-        from_tf=bool(".ckpt" in args.para_model_dir),
-        config=para_config,
-        trust_remote_code=True
-    )
-    
-    para_model.to(device)
-    para_model.eval()
-    
-    para_data_collator = DataCollatorForMultipleChoice(para_tokenizer, pad_to_multiple_of=None)
-    # para_data_collator = DataCollatorForMultipleChoice(
-    #     para_tokenizer, pad_to_multiple_of=8, return_tensors="pt"
-    # )
-    
-    para_raw_datasets = load_dataset(extension, data_files=data_files)
-    
-    # para preparation
-    para_context_name = "question"
-    
-    # def get_answer_sentence(examples, i):
-    #     if(examples["paragraphs"][i][0] == examples[label_column_name][i]):
-    #         return 0
-    #     if(examples["paragraphs"][i][1] == examples[label_column_name][i]):
-    #         return 1
-    #     if(examples["paragraphs"][i][2] == examples[label_column_name][i]):
-    #         return 2
-    #     if(examples["paragraphs"][i][3] == examples[label_column_name][i]):
-    #         return 3
-    #     return -1
-    
-    def para_preprocess_function(examples):
-        first_sentences = [[acontext] * 4 for acontext in examples[para_context_name]]
-        second_sentences = [
-            [context[paragraph[j]] for j in range(0, 4)] for i, paragraph in enumerate(examples["paragraphs"])
-        ]
-        labels = [0 for i in range(len(examples[para_context_name]))]
-
-        # Flatten out
-        first_sentences = list(chain(*first_sentences))
-        second_sentences = list(chain(*second_sentences))
-
-        # Tokenize
-        tokenized_examples = para_tokenizer(
-            first_sentences,
-            second_sentences,
-            max_length=512,
-            padding=False,
-            truncation=True,
-        )
-        # Un-flatten
-        tokenized_inputs = {k: [v[i : i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
-        tokenized_inputs["labels"] = labels
-        return tokenized_inputs
-    
-    para_processed_datasets = para_raw_datasets.map(
-        para_preprocess_function, batched=True, remove_columns=para_raw_datasets["test"].column_names
-    )
-    
-    para_dataloader = DataLoader(
-        para_processed_datasets["test"], shuffle=False, collate_fn=para_data_collator, batch_size=8
-    )
-    
-    # para inference
-    para_predictions = []
-    
-    for batch in tqdm(para_dataloader):
-        for k in batch.keys():
-            batch[k] = batch[k].to(device)
-        with torch.no_grad():
-            outputs = para_model(**batch)
-        para_predictions.append(outputs.logits.argmax(dim=-1))
-    para_predictions = [tensor.cpu().tolist() for tensor in para_predictions]
-    flat_para_predictions = [item for sublist in para_predictions for item in sublist]
-    # print(flat_para_predictions)
-    
-    with open(args.test_file, 'r', encoding='utf-8') as jsFile:
-        result_json = json.load(jsFile)
-        
-    for i in range(len(flat_para_predictions)):
-        result_json[i]["relevant"] = result_json[i]["paragraphs"][flat_para_predictions[i]]
-        
-    with open("quicksave.json", 'w', encoding='utf-8') as jsFile:
-        json.dump(result_json, jsFile, ensure_ascii=False)
-    
-    print("Para finished.")
     
     # span model
-    
-    data_files = {}
-    if args.test_file is not None:
-        data_files["test"] = "quicksave.json"
-        extension = data_files["test"].split(".")[-1]
     
     span_tokenizer = AutoTokenizer.from_pretrained(args.span_model_dir)
     
@@ -201,24 +105,30 @@ def main():
         
     # span preparation
     span_question_column_name = "question"
-    span_context_column_name = "relevant"
+    span_paragraphs_column_name = "paragraphs"
+    # span_context_column_name = "relevant"
     pad_on_right = span_tokenizer.padding_side == "right"
-    max_seq_length = min(512, span_tokenizer.model_max_length)
+    max_seq_length = span_tokenizer.model_max_length
     
     def span_prepare_features(examples):
         # Some of the questions have lots of whitespace on the left, which is not useful and will make the
         # truncation of the context fail (the tokenized question will take a lots of space). So we remove that
         # left whitespace
         examples[span_question_column_name] = [q.lstrip() for q in examples[span_question_column_name]]
-        examples[span_context_column_name] = [context[d] for d in examples[span_context_column_name]]
-        # examples[span_context_column_name] = [context[example[0]] for i, example in enumerate(examples["paragraphs"])]
+        new_contexts = []
+        for paras in examples[span_paragraphs_column_name]:
+            # Concatenate paragraphs
+            full_text = "".join([context[l] for l in paras])
+            new_contexts.append(full_text)
 
+        examples[span_paragraphs_column_name] = new_contexts
+        # examples[answer_column_name] = new_answers
         # Tokenize our examples with truncation and maybe padding, but keep the overflows using a stride. This results
         # in one example possible giving several features when a context is long, each of those features having a
         # context that overlaps a bit the context of the previous feature.
         tokenized_examples = span_tokenizer(
-            examples[span_question_column_name if pad_on_right else span_context_column_name],
-            examples[span_context_column_name if pad_on_right else span_question_column_name],
+            examples[span_question_column_name if pad_on_right else span_paragraphs_column_name],
+            examples[span_paragraphs_column_name if pad_on_right else span_question_column_name],
             truncation="only_second" if pad_on_right else "only_first",
             max_length=512,
             stride=128,

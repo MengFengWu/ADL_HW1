@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 def postprocess_qa_predictions(
-    flat_para_predictions,
     paragraphs,
     examples,
     features,
@@ -178,7 +177,7 @@ def postprocess_qa_predictions(
 
         # Use the offsets to gather the answer text in the original context.
         # context = example["context"]
-        context = paragraphs[example["paragraphs"][flat_para_predictions[example_index]]]
+        context = paragraphs[example["relevant"]]
         for pred in predictions:
             offsets = pred.pop("offsets")
             pred["text"] = context[offsets[0] : offsets[1]]
@@ -253,7 +252,6 @@ def postprocess_qa_predictions(
 
 
 def postprocess_qa_predictions_with_beam_search(
-    flat_para_predictions,
     paragraphs,
     examples,
     features,
@@ -386,7 +384,7 @@ def postprocess_qa_predictions_with_beam_search(
 
         # Use the offsets to gather the answer text in the original context.
         # context = example["context"]
-        context = paragraphs[example["paragraphs"][flat_para_predictions[example_index]]]
+        context = paragraphs[example["relevant"]]
         for pred in predictions:
             offsets = pred.pop("offsets")
             pred["text"] = context[offsets[0] : offsets[1]]

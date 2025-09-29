@@ -38,7 +38,7 @@ from huggingface_hub import HfApi
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from typing import Optional, Tuple
-from utils_qa import postprocess_qa_predictions
+from utils_qa_all import postprocess_qa_predictions
 
 import transformers
 from transformers import (
@@ -270,7 +270,7 @@ def parse_args():
     parser.add_argument(
         "--model_type",
         type=str,
-        default="bert",
+        default=None,
         help="Model type to use if training from scratch.",
         choices=MODEL_TYPES,
     )
@@ -476,6 +476,7 @@ def main():
     column_names = raw_datasets["train"].column_names
 
     question_column_name = "question" if "question" in column_names else column_names[0]
+    paragraphs_column_name = "paragraphs" if "paragraphs" in column_names else column_names[1]
     context_column_name = "relevant" if "relevant" in column_names else column_names[1]
     answer_column_name = "answer" if "answer" in column_names else column_names[2]
 
@@ -497,7 +498,23 @@ def main():
         # left whitespace
         
         examples[question_column_name] = [q.lstrip() for q in examples[question_column_name]]
-        examples[context_column_name] = [context[d] for d in examples[context_column_name]]
+        new_contexts, new_answers = [], []
+        for ans, paras, rele in zip(examples[answer_column_name], examples[paragraphs_column_name], examples[context_column_name]):
+            # Concatenate paragraphs
+            full_text = "".join([context[l] for l in paras])
+            new_contexts.append(full_text)
+
+            # Shift answer offset
+            offset = 0
+            for para in paras:
+                if para == rele: break
+                else:
+                    offset += len(context[para])
+            start = offset + ans["start"]
+            new_answers.append({"text": ans["text"], "start": start})
+
+        examples[context_column_name] = new_contexts
+        examples[answer_column_name] = new_answers
 
         # Tokenize our examples with truncation and maybe padding, but keep the overflows using a stride. This results
         # in one example possible giving several features when a context is long, each of those features having a
@@ -606,7 +623,23 @@ def main():
         # truncation of the context fail (the tokenized question will take a lots of space). So we remove that
         # left whitespace
         examples[question_column_name] = [q.lstrip() for q in examples[question_column_name]]
-        examples[context_column_name] = [context[d] for d in examples[context_column_name]]
+        new_contexts, new_answers = [], []
+        for ans, paras, rele in zip(examples[answer_column_name], examples[paragraphs_column_name], examples[context_column_name]):
+            # Concatenate paragraphs
+            full_text = "".join([context[l] for l in paras])
+            new_contexts.append(full_text)
+
+            # Shift answer offset
+            offset = 0
+            for para in paras:
+                if para == rele: break
+                else:
+                    offset += len(context[para])
+            start = offset + ans["start"]
+            new_answers.append({"text": ans["text"], "start": start})
+
+        examples[context_column_name] = new_contexts
+        examples[answer_column_name] = new_answers
 
         # Tokenize our examples with truncation and maybe padding, but keep the overflows using a stride. This results
         # in one example possible giving several features when a context is long, each of those features having a

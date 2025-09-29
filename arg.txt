@@ -14,7 +14,13 @@ span training (lert-base-chinese) ver 1:
 python span.py --paragraph_file ..\dataset\context.json --model_name_or_path hfl/chinese-lert-base --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --output_dir ..\model\span-lert\ --num_train_epochs 5 --with_tracking --report_to wandb
 
 span training (bert-base-chinese) ver 2:
-python span.py --paragraph_file ..\dataset\context.json --model_name_or_path bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 3e-5 --output_dir ..\model\span-bert-ver2\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
+python span.py --paragraph_file ..\dataset\context.json --model_name_or_path bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 3e-5 --output_dir ..\model\span-bert-verb\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
+
+span training (bert-base-chinese) ver 3:
+python span.py --paragraph_file ..\dataset\context.json --model_name_or_path bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 3e-5 --output_dir ..\model\span-bert-verc\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
+
+span training (bert-base-chinese) ver 4:
+python span.py --paragraph_file ..\dataset\context.json --model_name_or_path bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 5e-5 --output_dir ..\model\span-bert-verd\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 2 --with_tracking --report_to wandb
 
 span training (lert-base-chinese) ver 2:
 python span.py --paragraph_file ..\dataset\context.json --model_name_or_path hfl/chinese-lert-base --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 3e-5 --output_dir ..\model\span-lert-verb\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
@@ -31,11 +37,15 @@ python span.py --paragraph_file ..\dataset\context.json --model_name_or_path hfl
 span training (no_pretrain) ver 1:
 python span.py --paragraph_file ..\dataset\context.json --tokenizer_name bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 512 --learning_rate 3e-5 --output_dir ..\model\span-no_pretrain-vera\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
 
+paraspan training (bert-base-chinese)
+python paraspan.py --paragraph_file ..\dataset\context.json --model_name_or_path bert-base-chinese --train_file ..\dataset\train.json --validation_file ..\dataset\valid.json --test_file ..\dataset\test.json --max_seq_length 2048 --learning_rate 3e-5 --output_dir ..\model\paraspan-bert-vera\ --gradient_accumulation_steps 2 --per_device_train_batch_size 1 --num_train_epochs 3 --with_tracking --report_to wandb
 
 inferrence:
 python inference.py --para_model_dir ..\model\para-bert\ --span_model_dir ..\model\span-bert\ --context_file ..\dataset\context.json --test_file ..\dataset\test.json --output_file ..\result\prediction.csv
 python inference.py --para_model_dir ..\model\para-lert\ --span_model_dir ..\model\span-lert\ --context_file ..\dataset\context.json --test_file ..\dataset\test.json --output_file ..\result\prediction.csv
 python inference.py --para_model_dir ..\model\para-roberta-vera\ --span_model_dir ..\model\span-roberta-vera\ --context_file ..\dataset\context.json --test_file ..\dataset\test.json --output_file ..\result\prediction.csv
+python inference_merge.py --span_model_dir ..\model\paraspan-bert-vera\ --context_file ..\dataset\context.json --test_file ..\dataset\test.json --output_file ..\result\prediction-paraspan.csv
+
 
 
 inferrence (small):
